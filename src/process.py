@@ -1,34 +1,32 @@
-from load import get_wikipedia_table_data
+# src/process.py
+#
+# This file applies simple data transformations to the ACS data.
+# For this progress step, we calculate the share of households
+# that do NOT have access to a vehicle.
+#
+# This keeps the logic small, clear, and easy to test.
+
+
 import pandas as pd
 
-def process_wiki_data(wiki_url:str)-> pd.DataFrame:
-    # Note: The table index (e.g., 0) might change if Wikipedia updates the page
-    # 0 is usually the main table.
-    wiki_df = get_wikipedia_table_data(wiki_url, table_index=0)
-    if wiki_df is not None:
-        print("\nWikipedia (Largest Companies) Data Head:")
-        print(wiki_df.head())
 
-        # We need to clean this data before plotting, as it's messy
-        # For example, revenue is a string like "$3,171 million"
-        # This is a common next step in data science.
-        # Let's try to clean one column for plotting
-        try:
-            # Let's clean the 'Employees' column
-            if 'Employees' in wiki_df.columns:
-                # Remove commas, then convert to numeric
-                wiki_df['Employees_numeric'] = wiki_df['Employees'].astype(str).replace(',', '', regex=False)
-                # Handle non-numeric entries by coercing them to NaN
-                wiki_df['Employees_numeric'] = pd.to_numeric(wiki_df['Employees_numeric'], errors='coerce')
-                # Create a new, cleaner DataFrame for plotting
-                plot_df = pd.DataFrame({
-                    'Employees': wiki_df['Employees_numeric'],
-                    'Industry': wiki_df['Industry']['Industry']
-                })
-                return plot_df
-            else:
-                print("Could not find 'Employees' column for plotting.")
-        except Exception as e:
-            print(f"Could not clean/plot Wikipedia data: {e}")
+def compute_vehicle_access_rate(df):
+    """
+    Adds a new column showing the percentage of households
+    without a vehicle in each census tract.
 
-    return pd.DataFrame()
+    The formula is:
+        households_no_vehicle / population
+
+    We return a NEW DataFrame so that the original is unchanged.
+    """
+    result = df.copy()
+
+    # Avoid division by zero issues — if population is 0,
+    # the rate will be marked as NA.
+    result["no_vehicle_rate"] = (
+        result["households_no_vehicle"]
+        / result["population"].replace(0, pd.NA)
+    )
+
+    return result

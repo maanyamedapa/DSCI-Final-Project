@@ -1,107 +1,79 @@
+# src/load.py
+
+# This file downloads data from the U.S. Census ACS API.
+# The goal is to fetch basic information for all census tracts
+# in Los Angeles County (like median income and population).
+
+# This API does NOT require a key, which keeps the project simple
+# and safe for the progress submission.
+
+
 import os
-# os.environ["KAGGLE_CONFIG_DIR"] = "/home/alexey/"
-import kaggle
-import pandas as pd
 import requests
+import pandas as pd
 
-# --- 1. DOWNLOAD DATA FROM KAGGLE ---
 
-def get_kaggle_data(dataset_slug, extract_dir='kaggle_data'):
+def fetch_los_angeles_acs():
     """
-    Downloads a specific file from a Kaggle dataset, extracts it,
-    and loads it into a pandas DataFrame.
+    Pulls ACS 2023 data for Los Angeles County.
+    This includes:
+        - median household income
+        - population
+        - households without a vehicle
 
-    :param dataset_slug: The slug of the dataset (e.g., 'titanic')
-    :param extract_dir: Directory to extract files into
-    :return: pandas DataFrame or None
+    Returns:
+        A pandas DataFrame with GEOID and the selected variables.
     """
-    print(f"--- Loading data from Kaggle: {dataset_slug} ---")
-    try:
-        # Ensure extraction directory exists
-        os.makedirs(extract_dir, exist_ok=True)
 
-        print(f"Downloading {dataset_slug}...")
-        kaggle.api.dataset_download_files(dataset_slug, path=extract_dir, unzip=True)
+    # API URL — this asks for the variables we want
+    base_url = "https://api.census.gov/data/2023/acs/acs5"
+    chosen_variables = ["B19013_001E", "B01001_001E", "B08201_002E"]
 
-        csv_file_path = [f for f in os.listdir(extract_dir) if os.path.isfile(os.path.join(extract_dir, f))][0]
-        csv_file_path = os.path.join(extract_dir, csv_file_path) # make it a full path
-        # Load the extracted CSV into a DataFrame
-        if os.path.exists(csv_file_path):
-            print(f"Loading {csv_file_path} into DataFrame...")
-            df = pd.read_csv(csv_file_path)
-            print("Kaggle data loaded successfully.")
-            return df
-        else:
-            print(f"Error: Could not find extracted file {csv_file_path}")
-            return None
+    # Build the full URL for Los Angeles County (state=06, county=037)
+    full_url = (
+        f"{base_url}?get=NAME,{','.join(chosen_variables)}"
+        "&for=tract:*&in=state:06+county:037"
+    )
 
-    except Exception as e:
-        print(f"Error loading data from Kaggle: {e}")
-        return None
+    # Send request to the API
+    response = requests.get(full_url, timeout=60)
+    response.raise_for_status()
+
+    raw_json = response.json()
+
+    # The first row is the header
+    column_names = [
+        "NAME",
+        "median_income",
+        "population",
+        "households_no_vehicle",
+        "state",
+        "county",
+        "tract",
+    ]
+
+    data = pd.DataFrame(raw_json[1:], columns=column_names)
+
+    # Build full tract GEOID
+    data["GEOID"] = data["state"] + data["county"] + data["tract"]
+
+    # Convert numeric fields
+    for col in ["median_income", "population", "households_no_vehicle"]:
+        data[col] = pd.to_numeric(data[col], errors="coerce")
+
+    # Only return the cleaned useful columns
+    return data[["GEOID", "median_income", "population", "households_no_vehicle"]]
 
 
-# --- 2. DOWNLOAD FILE FROM WEB ---
-
-def get_web_csv_data(url):
+def save_acs_to_file(df, path="data/los_angeles_acs.csv"):
     """
-    Downloads a CSV file directly from a URL into a pandas DataFrame.
+    Saves the downloaded data to a CSV file inside the /data folder.
+    The /data folder is gitignored, so this file will NOT be committed
+    to GitHub (which is what the professor wants).
 
-    :param url: The direct URL to the .csv file
-    :return: pandas DataFrame or None
+    Returns:
+        The path where the file is saved.
     """
-    print(f"--- Loading data from Web URL: {url[:50]}... ---")
-    try:
-        # pandas can read a CSV directly from a URL
-        df = pd.read_csv(url)
-        print("Web CSV data loaded successfully.")
-        return df
-    except Exception as e:
-        print(f"Error loading data from URL: {e}")
-        return None
-
-
-# --- 3. SCRAPE DATA FROM WEBPAGE (WIKIPEDIA) ---
-def get_wikipedia_table_data(url, table_index=0):
-    """
-    Scrapes a specific table from a Wikipedia page into a pandas DataFrame.
-
-    MODIFIED: Added a User-Agent header to prevent 403 Forbidden errors.
-
-    :param url: The URL of the Wikipedia page
-    :param table_index: The 0-based index of the table to scrape
-    :return: pandas DataFrame or None
-    """
-    print(f"--- Scraping table from Wikipedia: {url[:50]}... ---")
-
-    # Set a User-Agent to mimic a real browser
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-
-    try:
-        # Use requests to get the page with the headers
-        response = requests.get(url, headers=headers)
-
-        # Check if the request was successful
-        if response.status_code != 200:
-            print(f"Error: Received status code {response.status_code}. Unable to fetch page.")
-            return None
-
-        # Pass the HTML content (response.text) to pandas
-        # It returns a LIST of DataFrames (all tables on the page)
-        tables = pd.read_html(response.text, flavor='bs4')
-
-        if tables:
-            print(f"Found {len(tables)} tables. Extracting table at index {table_index}...")
-            # We select the specific table we want
-            df = tables[table_index]
-            print("Wikipedia table scraped successfully.")
-            return df
-        else:
-            print("No tables found on the page.")
-            return None
-
-    except Exception as e:
-        print(f"Error scraping Wikipedia table: {e}")
-        return None
-
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    df.to_csv(path, index=False)
+    return path
