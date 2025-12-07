@@ -1,0 +1,66 @@
+
+# DSCI Final Project  
+Exploring how public transit accessibility and neighborhood characteristics relate to environmental and social outcomes in Los Angeles County.
+
+This project begins with a simple data pipeline that fetches publicly available Census data for all census tracts in Los Angeles County.
+
+It uses the key environmental outcome variables of PM2.5 and CES Score from CalEnviroS
+
+---
+
+# Data Sources
+
+Below are the data sources used so far.  
+This table comes from my Final Project Proposal but is simplified to match the current progress.
+
+| # | Name / Description | Source URL | Type | Fields | Format |
+|---|---------------------|------------|-------|---------|---------|
+| 1 | U.S. Census ACS 2023 5-Year Data (Los Angeles County tracts) | https://api.census.gov/data/2023/acs/acs5 | API (no key required) | median_income, population, households_no_vehicle | JSON -->
+. DataFrame |
+
+For the progress checkpoint, only one data source is implemented in code (the ACS API), 
+For this progress checkpoint, I built:
+
+- A working data pipeline using the U.S. Census ACS API
+- A simple data processing step that calculates the share of households without a vehicle  
+- Automated tests ('tests.py') that:
+  - verify the API returns real data
+  - check that processing works
+  - confirm that data can be saved to the gitignored '/data' folder
+
+No API keys are used, and no data is committed to the repository.
+
+
+Additional sources (public transit, environmental indicators) will be added in the next stage of the project.
+
+---
+
+# Results
+
+For this progress submission, the project successfully:
+
+- Fetches real ACS data from the U.S. Census API  
+- Extracts median income, population, and households without a vehicle  
+- Computes a simple no_vehicle_ratek for each tract  
+- Saves cleaned data into the data/ directory (which is gitignored)
+
+Full analysis, visualizations, and modeling at later stages of the project.
+
+---
+
+# Installation
+
+1. **Python version:** 3.9–3.12 recommended  
+2. **Required packages:** listed in "requirements.txt"  
+   - 'pandas'  
+   - 'requests'  
+   - 'pytest'  
+
+3. **API Keys:**  
+   - No API keys are needed for this progress submission.  
+   - Future datasets (EPA AQS, GTFS, etc.) will use a ".env" file, but none are required yet.
+
+4. **Environment Setup:**  
+   'bash'
+   pip install -r requirements.txt
+
