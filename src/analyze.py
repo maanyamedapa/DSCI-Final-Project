@@ -1,4 +1,4 @@
-    # src/analyze.py
+# src/analyze.py
 import pandas as pd
 import statsmodels.api as sm
 from sklearn.cluster import KMeans
@@ -71,119 +71,142 @@ def run_ols(df, y, x):
 
 def add_clusters(df, cols, k=5):
     """
-    Performs K-Means clustering to identify neighborhood typologies. Groups tracts based on shared characterisitcs.  
+    Performs K-Means clustering to identify neighborhood typologies. 
+    
+    SORTING LOGIC ADDED:
+    To ensure the map colors make sense (Red=Worst, Green=Best), we sort the 
+    clusters based on their Environmental Score (CES Score).
+    
+    Cluster 0 = Highest Pollution (Worst) -> Maps to Red
+    Cluster 4 = Lowest Pollution (Best)   -> Maps to Green
     """
     d = df.copy()
     for col in cols:
         if col in d.columns:
             d[col] = pd.to_numeric(d[col], errors='coerce')
             
-    fit_data = d.dropna(subset=cols)
+    # Create an explicit copy to avoid SettingWithCopyWarning
+    fit_data = d.dropna(subset=cols).copy()
+    
     if len(fit_data) < 20: 
         print("Not enough data to cluster.")
         return df
-    
+        
+    # We must scale the data using Z-score normalization before clustering
     scaler = StandardScaler()
     s = scaler.fit_transform(fit_data[cols])
     
     km = KMeans(n_clusters=k, random_state=42).fit(s)
+    raw_labels = km.labels_
     
-    fit_data["cluster"] = km.labels_.astype(str)
+    # --- SORTING STEPS ---
+    # 1. Attach temporary labels using .loc to prevent warnings
+    fit_data.loc[:, 'temp_label'] = raw_labels
+    
+    # 2. Identify which variable to sort by (Prefer CES Score for "Badness")
+    sort_col = 'ces_score' if 'ces_score' in cols else cols[0]
+    
+    # 3. Calculate mean score for each cluster and sort descending (High score = Bad)
+    # This gives us an order: Index 0 is the worst cluster, Index 4 is the best
+    means = fit_data.groupby('temp_label')[sort_col].mean().sort_values(ascending=False)
+    
+    # 4. Create a mapping from Old Random Label -> New Sorted Label (0..4)
+    # 0 will be the "Worst" (Highest CES), 4 will be "Best" (Lowest CES)
+    mapping = {old_lbl: new_rank for new_rank, old_lbl in enumerate(means.index)}
+    
+    # 5. Apply the mapping using .loc
+    fit_data.loc[:, "cluster"] = fit_data['temp_label'].map(mapping).astype(int)
     
     # Merge back keeping all rows
     return df.merge(fit_data[["GEOID", "cluster"]], on="GEOID", how="left")
 
 # --- VISUALIZATION TOOLS ---
 
-def plot_scatter_relationships(df, out_dir):
+def save_boxplot_comparison(df, out_path):
     """
-    Generates a Choropleth (Heat) Map of Los Angeles County.
-    We use 'Quantile' classification to ensure the colors are evenly distributed,
-    making it easier to see high/low patterns across the map
+    Creates a boxplot comparing CES Scores between tracts that HAVE bike lanes
+    vs tracts that DO NOT.
+    
+    This visualizes the 'Infrastructure Gap'. Answers the question 'Are bike lanes serving the 
+    most polluted communities, or are they concentrated in cleaner areas?'
     """
-    plots = [
-        {"y": "ces_score", "t": "CES 4.0 Score", "f": "scatter_ces.png"},
-        {"y": "pm25", "t": "PM2.5 Levels", "f": "scatter_pm25.png"},
-    ]
-    x_var = "bike_lane_density_sq_mi"
-    x_label = "Bike Lane Density (Miles / Sq. Mi)"
+    data = df.copy()
     
-    if x_var not in df.columns: return
-
-    d = df.copy()
-    d[x_var] = pd.to_numeric(d[x_var], errors='coerce')
-    d['has_bike_lanes'] = d[x_var] > 0
-
-    for p in plots:
-        y_var = p["y"]
-        if y_var not in d.columns: continue
-        d[y_var] = pd.to_numeric(d[y_var], errors='coerce')
-        plot_data = d.dropna(subset=[x_var, y_var])
-        if plot_data.empty: continue
-
-        # Scatter Plot
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.regplot(x=x_var, y=y_var, data=plot_data, ax=ax, scatter_kws={'alpha':0.5})
-        
-        # Proper Axis Labels
-        ax.set_xlabel(x_label, fontsize=12)
-        ax.set_ylabel(p['t'], fontsize=12)
-        plt.title(f"Relationship: {x_label} vs {p['t']}", fontsize=14)
-        
-        plt.tight_layout()
-        plt.savefig(out_dir / p["f"])
-        plt.close()
-
-        # Boxplot
-        fig, ax = plt.subplots(figsize=(8, 6))
-        sns.boxplot(x='has_bike_lanes', y=y_var, hue='has_bike_lanes', data=plot_data, ax=ax, legend=False, palette="Set2")
-        
-        ax.set_xlabel("Has Bike Lanes?", fontsize=12)
-        ax.set_ylabel(p['t'], fontsize=12)
-        ax.set_xticklabels(["No", "Yes"])
-        
-        plt.title(f"{p['t']} by Bike Lane Presence", fontsize=14)
-        plt.tight_layout()
-        plt.savefig(out_dir / p["f"].replace("scatter", "boxplot"))
-        plt.close()
-
-def save_choropleth(gdf, column, out, title):
-    if column not in gdf.columns: return
+    # Create a binary category (0 = No Lanes, 1 = Has Lanes)
+    data['has_lanes'] = data['bike_lane_density_sq_mi'] > 0
+    data = data.dropna(subset=['ces_score', 'has_lanes'])
     
-    gdf[column] = pd.to_numeric(gdf[column], errors='coerce')
-    valid = gdf[column].dropna()
-    if valid.empty: return
-
-    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-    try:
-        gdf.plot(column=column, ax=ax, legend=True, cmap='viridis', scheme='quantiles', missing_kwds={'color': 'lightgrey'})
-    except:
-        gdf.plot(column=column, ax=ax, legend=True, cmap='viridis')
-        
-    ax.set_axis_off()
-    plt.title(title, fontsize=16, fontweight='bold')
-    plt.savefig(out)
+    plt.figure(figsize=(8, 6))
+    sns.boxplot(x='has_lanes', y='ces_score', data=data, palette="Set2")
+    
+    plt.xlabel("Presence of Bike Infrastructure", fontsize=12)
+    plt.ylabel("CalEnviroScreen 4.0 Score", fontsize=12)
+    plt.title("Distribution of Environmental Burden by Infrastructure Status", fontsize=14)
+    plt.xticks([0, 1], ["No Bike Lanes", "Has Bike Lanes"])
+    
+    plt.tight_layout()
+    plt.savefig(out_path)
     plt.close()
 
-def save_cluster_map(gdf, out):
-    if "cluster" not in gdf.columns: 
-        print("Cannot map clusters: 'cluster' column missing.")
-        return
-        
+def save_choropleth(gdf, column, out_path, title, cmap='viridis'):
+    """
+    Generates a Choropleth (Heat) Map of Los Angeles County.
+    
+    Parameters:
+    - cmap: The color map to use. 
+      'RdYlGn' (Red-Yellow-Green) is good for "More is Better".
+      'RdYlGn_r' (Reversed) is good for "More is Bad" (e.g. pollution).
+    
+    We use 'Quantile' classification to ensure the colors are evenly distributed,
+    making it easier to see high/low patterns across the map.
+    """
+    if column not in gdf.columns: return
+
     fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    
+    # Ensure data is numeric
+    gdf[column] = pd.to_numeric(gdf[column], errors='coerce')
+    
+    gdf.plot(
+        column=column, 
+        ax=ax, 
+        legend=True, 
+        cmap=cmap, 
+        scheme='quantiles', # Breaks data into equal groups
+        missing_kwds={'color': '#f0f0f0'} # Light grey for missing data
+    )
+    
+    ax.set_axis_off()
+    plt.title(title, fontsize=16, fontweight='bold')
+    plt.savefig(out_path)
+    plt.close()
+
+def save_cluster_map(gdf, out_path):
+    """
+    Maps the K-Means clusters.
+    
+    Uses 'RdYlGn' (Red-Yellow-Green) colormap.
+    Because we sorted the clusters in 'add_clusters':
+    - 0 (Red) = Worst / Highest Pollution
+    - 4 (Green) = Best / Lowest Pollution
+    """
+    if "cluster" not in gdf.columns: return
+
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    
+    # Ensure cluster is numeric for the gradient colormap to work correctly
+    gdf["cluster"] = pd.to_numeric(gdf["cluster"], errors='coerce')
     
     gdf.plot(
         column="cluster", 
         ax=ax, 
-        cmap="tab10", 
-        legend=True, 
         categorical=True, 
-        missing_kwds={'color': 'lightgrey'}, 
-        legend_kwds={'loc': 'lower right', 'title': 'Neighborhood Type'}
+        legend=True, 
+        cmap='RdYlGn', # Red to Green gradient
+        legend_kwds={'title': 'Cluster Rank (0=Worst, 4=Best)', 'loc': 'lower right'}
     )
     
     ax.set_axis_off()
-    plt.title("Neighborhood Clusters (K-Means)", fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig(out)
+    plt.title("Neighborhood Typologies (Sorted by Environmental Score)", fontsize=16)
+    plt.savefig(out_path)
     plt.close()

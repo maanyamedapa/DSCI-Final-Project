@@ -1,66 +1,58 @@
 
 # DSCI Final Project  
-Exploring how public transit accessibility and neighborhood characteristics relate to environmental and social outcomes in Los Angeles County.
+Exploring how Bike lane accessibility and neighborhood characteristics relate to environmental outcomes in Los Angeles County.
 
 This project begins with a simple data pipeline that fetches publicly available Census data for all census tracts in Los Angeles County.
 
-It uses the key environmental outcome variables of PM2.5 and CES Score from CalEnviroS
+It uses the key environmental outcome variables of PM2.5 and CES Score from CalEnviroScreen data set
 
----
 
 # Data Sources
+1. CalEnviroScreen- Environmental pollution and population vulnerability scores. (Under Data and Additional Materials, available at- https://oehha.ca.gov/calenviroscreen/report/calenviroscreen-40 )
+2. LA County Bikeways (2024 Metro ATSP)- Shapefile containing vector data of bikeways in LA County (available at- https://data.lacounty.gov/datasets/la-county-bikeways-2024-metro-atsp/about)
+3. ACS 5-Year Estimates (2023)-Demographic data (Income, Vehicle Access) via Census API or API URL  available at- https://api.census.gov/data/2023/acs/acs5 )
+4. LA County Census Tracts- Spatial data for LA County tract boundaries (available at- https://data.lacounty.gov/datasets/2020-census-tracts-4/about)
 
-Below are the data sources used so far.  
-This table comes from my Final Project Proposal but is simplified to match the current progress.
+INSTRUCTIONS 
+How to Download the Data:
 
-| # | Name / Description | Source URL | Type | Fields | Format |
-|---|---------------------|------------|-------|---------|---------|
-| 1 | U.S. Census ACS 2023 5-Year Data (Los Angeles County tracts) | https://api.census.gov/data/2023/acs/acs5 | API (no key required) | median_income, population, households_no_vehicle | JSON -->
-. DataFrame |
+1. CalEnviroScreen 4.0:
 
-For the progress checkpoint, only one data source is implemented in code (the ACS API), 
-For this progress checkpoint, I built:
+-Download the "Excel" version from the OEHHA Website.
 
-- A working data pipeline using the U.S. Census ACS API
-- A simple data processing step that calculates the share of households without a vehicle  
-- Automated tests ('tests.py') that:
-  - verify the API returns real data
-  - check that processing works
-  - confirm that data can be saved to the gitignored '/data' folder
+-Rename it to CalEnviroScreenData.xlsx (if needed).
 
-No API keys are used, and no data is committed to the repository.
+-Place it in data/raw/.
+
+2. LA County Bikeways (2024 Metro ATSP):
+
+-Download the Shapefile form the LA Metro Open Data Portal Link provided above
+
+-Unzip all files (.shp, .shx, .dbf, etc.) into data/raw/.
+
+-Ensure the main file is named LA_County_Bikeways_(2024_Metro_ATSP).shp.
+
+3. Census Tracts:
+
+- Download the LA County Tracts GeoJSON (EPSG:4326 or 3310).
+
+- Save it as la_tracts.geojson in data/spatial/.
+
+4. ACS Data:
+
+No download required. The pipeline automatically fetches this from the Census API. Key not needed,
 
 
-Additional sources (public transit, environmental indicators) will be added in the next stage of the project.
 
----
+# Project Structure
+* src: Contains all source code (main.py, load.py, analyze.py, config.py, etc.).
+* tests.py: Tests for data processing.
+* results: Output directory for maps, plots, and statistical tables.
+*readme and requirements with instructions for data downloading and python libraries needed
 
-# Results
+## Installation
 
-For this progress submission, the project successfully:
-
-- Fetches real ACS data from the U.S. Census API  
-- Extracts median income, population, and households without a vehicle  
-- Computes a simple no_vehicle_ratek for each tract  
-- Saves cleaned data into the data/ directory (which is gitignored)
-
-Full analysis, visualizations, and modeling at later stages of the project.
-
----
-
-# Installation
-
-1. **Python version:** 3.9–3.12 recommended  
-2. **Required packages:** listed in "requirements.txt"  
-   - 'pandas'  
-   - 'requests'  
-   - 'pytest'  
-
-3. **API Keys:**  
-   - No API keys are needed for this progress submission.  
-   - Future datasets (EPA AQS, GTFS, etc.) will use a ".env" file, but none are required yet.
-
-4. **Environment Setup:**  
-   'bash'
+1. Install Dependencies:
+   '''bash
    pip install -r requirements.txt
 

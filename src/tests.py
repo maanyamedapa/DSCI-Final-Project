@@ -1,12 +1,11 @@
 # tests.py
-# Unit tests for load, process, and analyze modules.
 
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 import sys
 
-# Ensure the 'src' directory is in the path to allow imports
+# Ensure the src directory is in the path to allow imports
 # This looks up from 'tests.py' to find the 'src' folder
 sys.path.append(str(Path(__file__).resolve().parent / 'src'))
 
@@ -111,7 +110,7 @@ def test_analysis_functions(gdf):
     assert 'cluster' in gdf_clustered.columns, "Clustering failed to add 'cluster' column."
     print("  - K-Means Clustering ran successfully.")
     
-    # --- Spatial Mapping Test ---
+    #  Spatial Mapping Test 
     # Create a temporary test map
     out_path = config.PROJECT_ROOT / "results" / "test_map.png"
     out_path.parent.mkdir(parents=True, exist_ok=True)

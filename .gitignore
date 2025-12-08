@@ -13,4 +13,15 @@ __pycache__/
 .venv/
 
 
+# ignore mac system files
+.DS_Store
 
+# ignore python cache
+__pycache__/
+*.pyc
+
+# ignore data folder
+data/
+
+# ignore environment files
+.env
