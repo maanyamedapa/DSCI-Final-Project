@@ -16,7 +16,8 @@ import seaborn as sns
 def check_multicollinearity(df, features):
     """
     Calculates Variance Inflation Factor (VIF). If VIF is =1 NO multicollinearity is found amongst variables.
-    VIF >5 OR >10, multicollinearity is present and we need to regress each variable against CES Score individually
+    VIF >5 OR >10, multicollinearity is present and we need to regress each variable against CES Score individually.
+    After dropping median income, VIF is around 1 for all variables.
     """
     from statsmodels.stats.outliers_influence import variance_inflation_factor
     
@@ -73,12 +74,11 @@ def add_clusters(df, cols, k=5):
     """
     Performs K-Means clustering to identify neighborhood typologies. 
     
-    SORTING LOGIC ADDED:
     To ensure the map colors make sense (Red=Worst, Green=Best), we sort the 
     clusters based on their Environmental Score (CES Score).
     
-    Cluster 0 = Highest Pollution (Worst) -> Maps to Red
-    Cluster 4 = Lowest Pollution (Best)   -> Maps to Green
+    Cluster 0 = Highest Pollution (Worst).  Maps to Red
+    Cluster 4 = Lowest Pollution (Best) . Maps to Green
     """
     d = df.copy()
     for col in cols:
@@ -124,8 +124,8 @@ def add_clusters(df, cols, k=5):
 
 def save_boxplot_comparison(df, out_path):
     """
-    Creates a boxplot comparing CES Scores between tracts that HAVE bike lanes
-    vs tracts that DO NOT.
+    Creates a boxplot comparing CES Scores between tracts that have bike lanes
+    vs tracts that do not.
     
     This visualizes the 'Infrastructure Gap'. Answers the question 'Are bike lanes serving the 
     most polluted communities, or are they concentrated in cleaner areas?'
@@ -150,12 +150,12 @@ def save_boxplot_comparison(df, out_path):
 
 def save_choropleth(gdf, column, out_path, title, cmap='viridis'):
     """
-    Generates a Choropleth (Heat) Map of Los Angeles County.
+    Generates a Choropleth (Heat) Map of Los Angeles County
     
     Parameters:
-    - cmap: The color map to use. 
+    - cmap: The color map to use 
       'RdYlGn' (Red-Yellow-Green) is good for "More is Better".
-      'RdYlGn_r' (Reversed) is good for "More is Bad" (e.g. pollution).
+      'RdYlGn_r' (Reversed) is good for "More is Bad" (e.g. pollution)
     
     We use 'Quantile' classification to ensure the colors are evenly distributed,
     making it easier to see high/low patterns across the map.

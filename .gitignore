@@ -1,27 +1,20 @@
-# Never commit data or results
-data/
-results/
-
-# Never Commit
-.env
-kaggle.json
+#  System files 
+.DS_Store
 
 # Python cache
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Virtual environments
 .venv/
 
+# Secrets
+.env
+kaggle.json
 
-# ignore mac system files
-.DS_Store
-
-# ignore python cache
-__pycache__/
-*.pyc
-
-# ignore data folder
+# Data (required to be empty)
 data/
 
-# ignore environment files
-.env
+# Results (generated output)
+results/
