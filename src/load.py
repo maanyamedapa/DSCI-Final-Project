@@ -9,15 +9,25 @@ from .config import (
     ACS_BASE_URL, PROJECT_ROOT
 )
 
+    #suppress user warnings for clean output
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 def get_processed_dir():
+    """Ensures the processed data directory exists before saving."""
     out = PROJECT_ROOT / "data" / "processed"
     out.mkdir(parents=True, exist_ok=True)
     return out
+#--------------------------------------------------------------------------------------------------------------------------------------------#
+# DATA LOADING MODULE
+# Handles fetching, cleaning, and spatial projection of all raw datasets
+#--------------------------------------------------------------------------------------------------------------------------------------------#
 
 def load_census_tracts():
+    """
+    Loads the geographic boundaries polygons for Los Angeles Census Tracts
+    We need these shapes to visualize data and calculate the area of each neighborhood
+    """
     print("Loading Census Tracts...")
     try:
         gdf = gpd.read_file(TRACTS_FILE)
@@ -25,10 +35,10 @@ def load_census_tracts():
         print(f"Error loading GeoJSON for tracts: {e}")
         return gpd.GeoDataFrame(pd.DataFrame(columns=["GEOID", "GEOMETRY", "tract_area_sq_mi"]))
 
-    # Standardize Column Names
+    # Standardize Column Names to avoid errors
     gdf.columns = gdf.columns.str.upper()
     
-    # Set Geometry
+    # Set Geometry to upper case only
     if 'GEOMETRY' not in gdf.columns and 'geometry' in gdf.columns:
          gdf = gdf.rename_geometry('GEOMETRY')
     gdf = gdf.set_geometry("GEOMETRY")
@@ -43,24 +53,25 @@ def load_census_tracts():
         if candidates: geoid_col = candidates[0]
         else: raise KeyError(f"Could not find tract ID. Found: {list(gdf.columns)}")
 
-    # Standardize GEOID to 11 chars (06037...)
+    #Tract identifier (GEOID) often has different names in different files, so standardize GEOID to 11 chars (06037...)
     gdf['tract_suffix'] = gdf[geoid_col].astype(str).str.split('.').str[0].str.zfill(6)
     # Ensure we don't double-add the prefix if it exists
     gdf["GEOID"] = gdf['tract_suffix'].apply(lambda x: x if x.startswith('06037') else '06037' + x)
     
-    # Fix Geometry (Valid for Polygons)
+    #Fix Geometry (Valid for Polygons)
     gdf['GEOMETRY'] = gdf['GEOMETRY'].buffer(0)
     
-    # Reproject to CA Albers
+    # Reproject to CA Albers, So we can calculate square miles accurately, Latitude/Longitude degrees are not consistent units for area calculations
     if gdf.crs != "EPSG:3310":
         gdf = gdf.to_crs("EPSG:3310")
         
-    # Calculate Area in Sq Miles
+    #Calculate Area in Sq Miles
     gdf['tract_area_sq_mi'] = gdf.area * 3.86102e-7
     
     print(f"Loaded {len(gdf)} census tracts.")
     return gdf[['GEOID', 'GEOMETRY', 'tract_area_sq_mi']]
 
+#Load CalEnviroScreen dataset, provides our dependent variable (CES Score) and environmental health metrics.
 def load_calenviroscreen():
     print("Loading CalEnviroScreen Data...")
     f = CALENVIROSCREEN_FILE
@@ -96,15 +107,15 @@ def load_calenviroscreen():
 
     if 'California County' in df.columns:
         df = df[df['California County'] == 'Los Angeles'].copy()
-        
+
+#Rename variables, ces_score: The composite pollution burden score, pm25: Particulate matter concentration      
     df.columns = df.columns.str.strip()
     rename_map = {
         "Census Tract": "GEOID", "CES 4.0 Score": "ces_score", 
-        "PM2.5": "pm25", "CES 4.0 Percentile Range": "ces_percentile_range",
-        
+        "PM2.5": "pm25", "CES 4.0 Percentile Range": "ces_percentile_range",     
     }
     df = df.rename(columns=rename_map)
-
+#clean the GEOID column to ensure it matches the Census Tracts file
     df['GEOID'] = df['GEOID'].astype(str).str.split('.').str[0]
     df['GEOID'] = df['GEOID'].apply(lambda x: '0' + x if len(x) == 10 else x)
     df = df[df['GEOID'].str.startswith('06037')]
@@ -121,6 +132,12 @@ def load_calenviroscreen():
     return df[final_cols]
 
 def load_bikeways():
+    """
+    Loads the LA County Bikeways shapefile and performs a spatial intersection
+    The Bikeways file is organized by 'Segment' ID, on a county level not by 'Census Tract' ID 
+    To assign bike lanes to tracts, we must physically overlay the lines onto
+    the tract polygons and split them at the boundaries.
+    """
     print("Loading Bikeways Shapefile...")
     try:
         bike_gdf = gpd.read_file(BIKEWAYS_FILE)
@@ -131,9 +148,9 @@ def load_bikeways():
     tracts = load_census_tracts()
     if tracts.empty: return pd.DataFrame(columns=["GEOID", "bikeway_miles"])
 
-# ---HANDLE MISSING CRS ---
+# Ensure both files share the same projection before intersecting
     if bike_gdf.crs is None:
-        print("Warning: Bikeways Shapefile has no CRS. Assuming EPSG:4326 (Lat/Lon).")
+        print("Warning: Bikeways Shapefile has no CRS. (Lat/Lon).")
         bike_gdf.set_crs(epsg=4326, inplace=True)
     
     print(f"Bikeways CRS: {bike_gdf.crs}")
@@ -204,6 +221,14 @@ def load_bikeways():
     return final_df
 
 def fetch_acs_los_angeles():
+    """
+    Fetches demographic data from the US Census API.
+    
+    Variables fetched:
+    - B19013_001E: Median Household Income
+    - B01001_001E: Total Population
+    - B08201_002E: Households with NO vehicle available
+    """
     print("Fetching ACS Data...")
     v = ["B19013_001E", "B01001_001E", "B08201_002E","B08201_001E"]
     url = (f"{ACS_BASE_URL}?get=NAME,{','.join(v)}&for=tract:*&in=state:06+county:037")

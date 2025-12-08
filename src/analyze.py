@@ -6,11 +6,17 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+#--------------------------------------------------------------------------------------------------------------------------------------------#
+# ANALYSIS & VISUALIZATION MODULE
+# Contains the core statistical models and plotting functions.
+#--------------------------------------------------------------------------------------------------------------------------------------------#
+
 # --- STATISTICAL CHECKS ---
 
 def check_multicollinearity(df, features):
     """
-    Calculates Variance Inflation Factor (VIF).
+    Calculates Variance Inflation Factor (VIF). If VIF is =1 NO multicollinearity is found amongst variables.
+    VIF >5 OR >10, multicollinearity is present and we need to regress each variable against CES Score individually
     """
     from statsmodels.stats.outliers_influence import variance_inflation_factor
     
@@ -29,28 +35,19 @@ def check_multicollinearity(df, features):
     print("\n--- Multicollinearity Check (VIF) ---")
     print(vif.round(2))
 
-def plot_correlation_matrix(df, features, out_path):
-    plt.figure(figsize=(10, 8))
-    
-    d = df[features].copy()
-    for col in features:
-        d[col] = pd.to_numeric(d[col], errors='coerce')
-    d = d.dropna()
-    
-    if d.empty: return
-    
-    # Create correlation matrix
-    sns.heatmap(d.corr(), annot=True, cmap='coolwarm', fmt=".2f")
-    plt.title("Correlation Matrix of Predictors")
-    plt.tight_layout()
-    plt.savefig(out_path)
-    plt.close()
 
-# --- ANALYSIS TOOLS ---
+#  --- ANALYSIS TOOLS ---
 
 def run_ols(df, y, x):
     """
-    Runs an Ordinary Least Squares (OLS) Regression.
+    Runs an Ordinary Least Squares (OLS) regression
+    
+    Objective: Quantify the relationship between Bike Lane Density and Environmental Score,
+    while controlling for socioeconomic factors like Income and Vehicle Access
+    
+    We use Heteroscedasticity-Consistent standard errors
+    This is standard practice for geographic data because variance usually changes 
+    across different regions, especially significant in LA County where income disparities are high
     """
     d = df.copy()
     cols_to_process = [y] + x
@@ -74,7 +71,7 @@ def run_ols(df, y, x):
 
 def add_clusters(df, cols, k=5):
     """
-    Performs K-Means clustering.
+    Performs K-Means clustering to identify neighborhood typologies. Groups tracts based on shared characterisitcs.  
     """
     d = df.copy()
     for col in cols:
@@ -99,6 +96,11 @@ def add_clusters(df, cols, k=5):
 # --- VISUALIZATION TOOLS ---
 
 def plot_scatter_relationships(df, out_dir):
+    """
+    Generates a Choropleth (Heat) Map of Los Angeles County.
+    We use 'Quantile' classification to ensure the colors are evenly distributed,
+    making it easier to see high/low patterns across the map
+    """
     plots = [
         {"y": "ces_score", "t": "CES 4.0 Score", "f": "scatter_ces.png"},
         {"y": "pm25", "t": "PM2.5 Levels", "f": "scatter_pm25.png"},
